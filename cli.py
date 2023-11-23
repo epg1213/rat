@@ -3,10 +3,26 @@ import socket
 import rsa
 from cryptography.fernet import Fernet
 
-s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+class SecureSocket:
+  def __init__(self, sock=None, host="127.0.0.1", port=62832):
+    if sock is None:
+      self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    else:
+      self.sock = sock
+    try:
+      self.sock.connect((host, port))
+    except:
+      exit("Server unreachable.")
 
-s.connect(("127.0.0.1", 62832))
+    connection_key=rsa.PublicKey.load_pkcs1(self.sock.recv(2048))
+    key = Fernet.generate_key()
+    print(key)
+    encrypted_key=rsa.encrypt(key, connection_key)
+    self.sock.send(encrypted_key)
+    self.key = Fernet(key)
 
-public_key=rsa.PublicKey.load_pkcs1(s.recv(2048))
-print(public_key)
-# gen & send symetric key via socket
+  def send(self, message):
+    print(message)
+
+sock=SecureSocket()
+sock.send('Hello, World !')
