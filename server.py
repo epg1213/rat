@@ -104,7 +104,7 @@ class SecureServer:
 if __name__ == "__main__":
   try:
     port=int(argv[1])
-    if port<0 or port>65535:
+    if port<1025 or port>65535:
       port=62832
   except:
     port=62832
