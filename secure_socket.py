@@ -2,7 +2,9 @@
 import socket
 import rsa
 from cryptography.fernet import Fernet
-MSGLEN=4096
+SEND_MSG_LEN=2048
+RECV_MSG_LEN=4096
+from time import sleep
 
 HOSTNAME=socket.gethostname()
 
@@ -18,18 +20,42 @@ class Socket:
     return f"secure socket at ({self.host}:{self.port})"
 
   def send(self, message):
-    msg=self.key.encrypt(str(message).encode('utf-8'))
-    self.connection.send(msg)
+    to_send=str(message).encode('utf-8')
+    # split message in a list of packets with max size SEND_MSG_LEN
+    packs=[]
+    while len(to_send) > SEND_MSG_LEN:
+      packs.append(to_send[:SEND_MSG_LEN])
+      to_send=to_send[SEND_MSG_LEN:]
+    if len(to_send)>0:
+      packs.append(to_send)
+    # send packets one by one until sending '/' to terminate
+    for pack in packs:
+      msg=self.key.encrypt(pack)
+      self.connection.send(msg)
+      sleep(0.1)
+    self.connection.send(self.key.encrypt(b'/'))
 
   def receive(self):
-    msg=self.connection.recv(MSGLEN)
-    message=self.key.decrypt(msg).decode('utf-8')
+    # get packets one by one until getting '/' to terminate
+    to_recv=[]
+    ended=False
+    while not ended:
+      msg=self.connection.recv(RECV_MSG_LEN)
+      pack=self.key.decrypt(msg).decode('utf-8')
+      ended=pack=='/'
+      if not ended:
+        to_recv.append(pack)
+    # join all packets together to get the message
+    message=''.join(to_recv)
     return message
 
   def disconnect(self):
     if not self.connected:
       return
-    self.send("exit")
+    try:
+      self.send("exit")
+    except BrokenPipeError:
+      pass
     self.connection.close()
     self.connected = False
 

