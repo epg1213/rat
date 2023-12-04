@@ -101,7 +101,7 @@ if __name__ == "__main__":
       case "search":
         filename, path = socket.get_params()
         socket.send(system.search(filename,path))
-      case "exit":
+      case "delete":
         using=False
       case _:
         pass

