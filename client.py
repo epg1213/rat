@@ -57,6 +57,17 @@ class Windows(Computer):
   def ipconfig(self):
     return check_output(["ipconfig"]).decode('utf-8')
 
+  def get_env(self):
+    user=os.getlogin()
+    path=os.getcwd()
+    home='C:\\'
+    end=">"
+    return [user, home, path, end]
+  
+  def get_prompt(self):
+    user, home, path, end = self.get_env()
+    return f"{path}{end} "
+
 def download(socket):
   filename_src, filename_dst=socket.receive().split('*')
   if os.path.isfile(filename_src):
