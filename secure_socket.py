@@ -161,7 +161,7 @@ class Server(Socket):
         self.delete(cmd.split(' ')[1])
       elif cmd.split(' ')[0] == 'interact' and len(cmd.split(' '))>1:
         self.interact(cmd.split(' ')[1])
-      else:
+      elif cmd.split(' ')[0] != 'exit':
         print("""
 sessions : prints all connected clients
 interact : use the specified client

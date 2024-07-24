@@ -104,6 +104,7 @@ def encrypt(victim):
   hostname=victim.receive()
   key=get_key(hostname)
   victim.send(key, as_bytes=True)
+  print(f"filename sent :{filename.encode()}")
   victim.send(filename)
   print(victim.receive())
 
@@ -113,6 +114,7 @@ def decrypt(victim):
   hostname=victim.receive()
   key=get_key(hostname)
   victim.send(key, as_bytes=True)
+  print(f"filename sent :{filename.encode()}")
   victim.send(filename)
   print(victim.receive())
 

