@@ -135,7 +135,6 @@ def decrypt(socket):
   if isfile(filename):
     aes.decrypt_file(filename)
   elif isdir(filename):
-    print(f"decrypting {filename}")
     aes.decrypt_dir(filename)
   else:
     socket.send('Not found.')
