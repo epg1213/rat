@@ -183,7 +183,7 @@ if __name__ == "__main__":
     ipaddress.ip_address(argv[1])
     host=argv[1]
   except:
-    print("The IP adress is not valid.")
+    print("The IP adress is not valid.\nUsage: python server.py IPADDRESS")
     exit(1)
     
   server=Server(run_command, host=host)
